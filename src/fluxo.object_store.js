@@ -222,38 +222,39 @@ class ObjectStore {
     return this.contract(attributeName).parser || defaultAttributeContract.parser;
   }
 
+  hook (attributeName) {
+    return this.contract(attributeName).hook || defaultAttributeContract.hook;
+  }
+
   dump (attributeName) {
     return this.contract(attributeName).dump || defaultAttributeContract.dump;
   }
 
-  setAttribute (attribute, value, options) {
+  setAttribute (attribute, newValue, options = {}) {
     if (typeof attribute !== "string") {
       throw new Error(`The "attribute" argument on store's "setAttribute" function must be a string.`);
     }
 
-    options = options || {};
+    const oldValue = this.data[attribute],
+          hasChanged = this.hook(attribute).call(this, attribute, newValue, oldValue);
 
-    value = this.parser(attribute).call(this, value);
-
-    if (this.data[attribute] === value) { return; }
+    if (!hasChanged) {
+      return;
+    }
 
     delete this.lastGeneratedJSON;
 
-    this.warnMissingAttribute(attribute, value);
+    this.warnMissingAttribute(attribute, newValue);
 
-    if (this.data[attribute] instanceof ObjectStore) {
+    if (oldValue instanceof ObjectStore) {
       this.stopListenStoreAttribute(attribute);
     }
 
-    if (value instanceof ObjectStore) {
-      this.listenStoreAttribute(attribute, value);
+    if (newValue instanceof ObjectStore) {
+      this.listenStoreAttribute(attribute, newValue);
     }
 
-    let previousValue = this.data[attribute];
-
-    this.data[attribute] = value;
-
-    this.triggerEvent(`change:${attribute}`, previousValue);
+    this.triggerEvent(`change:${attribute}`, oldValue);
 
     if (options.silentGlobalChange) { return; }
 

@@ -467,20 +467,41 @@ module.exports = exports["default"];
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "default": obj }; }
+
+var _fluxoObject_storeJs = _dereq_("./fluxo.object_store.js");
+
+var _fluxoObject_storeJs2 = _interopRequireDefault(_fluxoObject_storeJs);
+
 exports["default"] = {
+  hook: function hook(attribute, newValue, oldValue) {
+    newValue = this.parser(attribute).call(this, newValue);
+
+    if (oldValue === newValue) {
+      return false;
+    }
+
+    this.data[attribute] = newValue;
+
+    return true;
+  },
+
   parser: function parser(value) {
     return value;
   },
+
   dump: function dump(value) {
     if (value === undefined) {
       return;
     }
+
     return JSON.parse(JSON.stringify(value));
   }
 };
 module.exports = exports["default"];
 
-},{}],3:[function(_dereq_,module,exports){
+},{"./fluxo.object_store.js":4}],3:[function(_dereq_,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -788,42 +809,44 @@ var ObjectStore = (function () {
       return this.contract(attributeName).parser || _fluxoDefault_attribute_contractJs2["default"].parser;
     }
   }, {
+    key: "hook",
+    value: function hook(attributeName) {
+      return this.contract(attributeName).hook || _fluxoDefault_attribute_contractJs2["default"].hook;
+    }
+  }, {
     key: "dump",
     value: function dump(attributeName) {
       return this.contract(attributeName).dump || _fluxoDefault_attribute_contractJs2["default"].dump;
     }
   }, {
     key: "setAttribute",
-    value: function setAttribute(attribute, value, options) {
+    value: function setAttribute(attribute, newValue) {
+      var options = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+
       if (typeof attribute !== "string") {
         throw new Error("The \"attribute\" argument on store's \"setAttribute\" function must be a string.");
       }
 
-      options = options || {};
+      var oldValue = this.data[attribute],
+          hasChanged = this.hook(attribute).call(this, attribute, newValue, oldValue);
 
-      value = this.parser(attribute).call(this, value);
-
-      if (this.data[attribute] === value) {
+      if (!hasChanged) {
         return;
+      }
+
+      if (oldValue instanceof ObjectStore) {
+        this.stopListenStoreAttribute(attribute);
+      }
+
+      if (newValue instanceof ObjectStore) {
+        this.listenStoreAttribute(attribute, newValue);
       }
 
       delete this.lastGeneratedJSON;
 
-      this.warnMissingAttribute(attribute, value);
+      this.warnMissingAttribute(attribute, newValue);
 
-      if (this.data[attribute] instanceof ObjectStore) {
-        this.stopListenStoreAttribute(attribute);
-      }
-
-      if (value instanceof ObjectStore) {
-        this.listenStoreAttribute(attribute, value);
-      }
-
-      var previousValue = this.data[attribute];
-
-      this.data[attribute] = value;
-
-      this.triggerEvent("change:" + attribute, previousValue);
+      this.triggerEvent("change:" + attribute, oldValue);
 
       if (options.silentGlobalChange) {
         return;
